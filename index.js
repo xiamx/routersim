@@ -13,7 +13,7 @@ nconf.argv().env().defaults({
 
 var getRouterKey = function(processIP, processPort) {
     return processIP + ":" + processPort;
-}
+};
 
 attachedClients = {};
 routers = {};
@@ -25,31 +25,31 @@ var genSendHello = function(dstIP) {
         srcProcessPort: server.address().port,
         srcIP: nconf.get('emulatedip'),
         dstIP: dstIP
-    }
+    };
     return function(socket) {
         socket.write(JSON.stringify(helloPacket));
-    }
-}
+    };
+};
 
 var processHello = function(data, connection) {
-    key = getRouterKey(data.srcProcessIP, data.srcProcessPort)
+    key = getRouterKey(data.srcProcessIP, data.srcProcessPort);
     if (!routers[key]) {
         routers[key] = {
             status: 'INIT',
             processIP: data.srcProcessIP,
             processPort: data.srcProcessPort,
             emulatedip: data.srcIP
-        }
+        };
         genSendHello(data.srcIP)(connection);
     } else {
         if (routers[key].status === 'INIT') {
             routers[key] = {
                 status: 'TWO_WAY'
-            }
+            };
             genSendHello(data.srcIP)(connection);
         }
     }
-}
+};
 
 var processData = function(data, connection) {
     if (data.type === 'hello') {
@@ -63,7 +63,7 @@ var server = net.createServer(function(c) { //'connection' listener
         data = JSON.parse(data);
         winston.info('server received data', data);
         processData(data, c);
-    })
+    });
     c.on('end', function() {
         winston.info('server disconnected');
     });
@@ -93,14 +93,14 @@ attach = function(remoteip, remoteport, emulatedip, weight) {
         processPort: remoteport,
         emulatedip: emulatedip,
         socket: client
-    }
-}
+    };
+};
 
 start = function() {
     _.each(attachedClients, function(client){
         genSendHello(client.emulatedip)(client.socket);
     });
-}
+};
 
 repl.start({
   input: process.stdin,
