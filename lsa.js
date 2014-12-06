@@ -1,10 +1,10 @@
 var _ = require('underscore');
-var LSA = function(linkStateID, advRouter, lsaAge, lsaSeqNum) {
+var LSA = function(linkStateID, advRouter, lsaAge, lsaSeqNum, links) {
     this.linkStateID = linkStateID;
     this.advRouter = advRouter;
     this.lsaAge = lsaAge || 0; 
     this.lsaSeqNum = lsaSeqNum || 0;
-    this.links = [];
+    this.links = links || [];
 };
 
 LSA.prototype.addLink = function(linkDescription) {

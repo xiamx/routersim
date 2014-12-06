@@ -161,7 +161,14 @@ var processUpdate = function(data, connection) {
             status: 'FULL'
         });
     }
-    _.each(data.LSA, lsdb.addLSA);
+    _.each(data.LSA, function(lsa){
+        if (lsdb.addLSA(lsa) && lsa.lsaAge < 16){
+            lsa.lsaAge++;
+            _.each(_.values(routers), function(router){
+                genBroadcastLSAUpdate(router.emulatedip, [lsa])(router.socket);
+            });
+        }
+    });
 };
 
 var processData = function(data, connection) {
@@ -238,9 +245,10 @@ var attach = function(remoteip, remoteport, emulatedip, weight) {
     lsdb.addLSA(lsa);
 };
 var disconnect = function(portNum) {
-    p = ports.get(portNum);
+    var p = ports.get(portNum);
     var emulatedip = p.emulatedip;
     var lsa = lsdb.getLSA(getRouterSelf().emulatedip);
+    console.log(util.inspect(lsa));
     lsa.removeLink(emulatedip);
     lsa.lsaSeqNum++;
     lsdb.addLSA(lsa);
@@ -258,6 +266,11 @@ var start = function() {
         genSendHello(client.emulatedip)(client.socket);
     });
 };
+
+var detect = function(dstIP) {
+    
+};
+
 var local = repl.start({
     input: process.stdin,
     output: process.stdout,
@@ -268,6 +281,7 @@ var local = repl.start({
 local.context.start = start;
 local.context.attach = attach;
 local.context.disconnect = disconnect;
+local.context.detect = detect;
 local.context.routers = routers;
 local.context.lsdb = lsdb;
 local.context.ports = ports;
