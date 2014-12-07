@@ -19,6 +19,7 @@ nconf.argv().env().defaults({
 });
 
 var SENTINAL = '\r\n';
+var LSA_MAX_AGE = 5;
 
 var sendMessage = function(socket, msg) {
     socket.write(msg.concat(SENTINAL));
@@ -39,11 +40,13 @@ var genPacketCommon = function(params) {
         dstIP: params.dstIP
     };
 };
-var genSendHello = function(dstIP) {
+var genSendHello = function(dstIP, weight) {
+    weight = weight || '';
     var helloPacket = _.extend(genPacketCommon({
         dstIP: dstIP
     }), {
-        type: 'hello'
+        type: 'hello',
+        weight: weight
     });
     return function(socket) {
         sendMessage(socket, JSON.stringify(helloPacket));
@@ -106,14 +109,30 @@ var processHello = function(data, connection) {
             processIP: data.srcProcessIP,
             processPort: data.srcProcessPort,
             emulatedip: data.srcIP,
+            weight: data.weight,
             socket: connection
         };
-        genSendHello(data.srcIP)(connection);
+        
+        /*
+        var lsa = lsdb.getLSA(data.dstIP);
+        if (!_.some(lsa.links, function(link){
+            return link.linkID === data.srcIP;
+        })) {
+            console.log('phellolink', lsa);
+            var port = ports.attach(data.srcProcessIP, data.srcProcessPort, data.srcIP, data.weight);
+            lsa.addLink(new LinkDescription(data.srcIP, port, data.weight));
+            lsa.lsaSeqNum++;
+            lsa.lsaAge = 0;
+            lsdb.addLSA(lsa);
+        }
+        */
+        genSendHello(data.srcIP, data.weight)(connection);
+        
     } else if(routers[key].status === 'INIT') {
         routers[key] = _.extend(routers[key], {
             status: 'TWO_WAY'
         });
-        genSendHello(data.srcIP)(connection);
+        genSendHello(data.srcIP, data.weight)(connection);
     } else if(routers[key].status === 'TWO_WAY') {
         routers[key] = _.extend(routers[key], {
             status: 'EXSTART'
@@ -162,7 +181,7 @@ var processUpdate = function(data, connection) {
         });
     }
     _.each(data.LSA, function(lsa){
-        if (lsdb.addLSA(lsa) && lsa.lsaAge < 16){
+        if (lsdb.addLSA(lsa) && lsa.lsaAge < LSA_MAX_AGE){
             lsa.lsaAge++;
             _.each(_.values(routers), function(router){
                 genBroadcastLSAUpdate(router.emulatedip, [lsa])(router.socket);
@@ -217,6 +236,7 @@ server.listen(nconf.get('listenPort'), function() { //'listening' listener
     winston.info('LSDB Initialized');
 });
 var attach = function(remoteip, remoteport, emulatedip, weight) {
+    remoteip = remoteip || '';
     var client = net.connect({
         port: remoteport,
         host: remoteip
@@ -235,6 +255,7 @@ var attach = function(remoteip, remoteport, emulatedip, weight) {
         processIP: remoteip,
         processPort: remoteport,
         emulatedip: emulatedip,
+        weight: weight, 
         status: 'INIT',
         socket: client
     };
@@ -242,6 +263,7 @@ var attach = function(remoteip, remoteport, emulatedip, weight) {
     var lsa = lsdb.getLSA(getRouterSelf().emulatedip);
     lsa.addLink(new LinkDescription(emulatedip, port, weight));
     lsa.lsaSeqNum++;
+    lsa.lsaAge = 0;
     lsdb.addLSA(lsa);
 };
 var disconnect = function(portNum) {
@@ -251,6 +273,7 @@ var disconnect = function(portNum) {
     console.log(util.inspect(lsa));
     lsa.removeLink(emulatedip);
     lsa.lsaSeqNum++;
+    lsa.lsaAge = 0;
     lsdb.addLSA(lsa);
     ports.detach(portNum);
     _.each(_.values(routers), function(router){
@@ -263,12 +286,12 @@ var start = function() {
         return c.socket;
     });
     _.each(socketEnabledClients, function(client) {
-        genSendHello(client.emulatedip)(client.socket);
+        genSendHello(client.emulatedip, client.weight)(client.socket);
     });
 };
 
 var detect = function(dstIP) {
-    
+    lsdb.getSSSP(dstIP);
 };
 
 var local = repl.start({
